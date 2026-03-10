@@ -1,0 +1,747 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>PriceLabs Deviation Analyzer</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Syne:wght@400;600;700;800&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet" />
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --bg: #F5F3EE; --surface: #FFFFFF; --surface-2: #F0EDE6;
+      --border: #E2DDD4; --border-strong: #C8C0B0;
+      --text: #1A1714; --text-2: #6B6358; --text-3: #9C9080;
+      --accent: #2A5C45; --accent-light: #E8F2EC;
+      --positive: #1E6B3C; --positive-bg: #E8F5EE;
+      --negative: #B83B1E; --negative-bg: #FDEEE9;
+      --shadow: 0 1px 3px rgba(26,23,20,0.08), 0 4px 16px rgba(26,23,20,0.04);
+      --shadow-lg: 0 8px 32px rgba(26,23,20,0.12);
+      --radius: 10px; --radius-lg: 16px;
+    }
+    html { font-size: 15px; }
+    body { font-family: 'DM Sans', sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; line-height: 1.5; }
+
+    /* HEADER */
+    header { background: var(--text); color: #F5F3EE; padding: 0 2rem; display: flex; align-items: center; justify-content: space-between; height: 56px; position: sticky; top: 0; z-index: 100; }
+    .logo { font-family: 'Syne', sans-serif; font-weight: 800; font-size: 1.05rem; letter-spacing: -0.02em; display: flex; align-items: center; gap: 10px; }
+    .logo-dot { width: 8px; height: 8px; border-radius: 50%; background: #7EC8A0; display: inline-block; }
+    .header-badge { font-family: 'DM Mono', monospace; font-size: 0.68rem; background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.15); color: rgba(255,255,255,0.7); padding: 3px 10px; border-radius: 20px; letter-spacing: 0.05em; }
+
+    main { max-width: 1400px; margin: 0 auto; padding: 2.5rem 2rem; }
+
+    /* UPLOAD */
+    .upload-section { margin-bottom: 2rem; }
+    .section-label { font-family: 'DM Mono', monospace; font-size: 0.7rem; letter-spacing: 0.12em; text-transform: uppercase; color: var(--text-3); margin-bottom: 0.75rem; }
+    .upload-zone { background: var(--surface); border: 2px dashed var(--border-strong); border-radius: var(--radius-lg); padding: 3rem 2rem; text-align: center; cursor: pointer; transition: all 0.2s ease; position: relative; }
+    .upload-zone:hover, .upload-zone.drag-over { border-color: var(--accent); background: var(--accent-light); }
+    .upload-zone input[type="file"] { position: absolute; inset: 0; opacity: 0; cursor: pointer; width: 100%; height: 100%; }
+    .upload-icon { width: 52px; height: 52px; background: var(--surface-2); border-radius: 12px; display: flex; align-items: center; justify-content: center; margin: 0 auto 1rem; font-size: 1.5rem; }
+    .upload-title { font-family: 'Syne', sans-serif; font-weight: 700; font-size: 1.1rem; color: var(--text); margin-bottom: 0.35rem; }
+    .upload-sub { font-size: 0.85rem; color: var(--text-3); }
+    .upload-instruction { margin-top: 0.9rem; font-size: 0.8rem; color: var(--text-2); background: var(--surface-2); border: 1px solid var(--border); border-radius: 8px; padding: 8px 14px; display: inline-block; }
+    .upload-hint { margin-top: 1rem; display: inline-flex; align-items: center; gap: 6px; font-family: 'DM Mono', monospace; font-size: 0.7rem; color: var(--text-3); background: var(--surface-2); padding: 5px 12px; border-radius: 20px; }
+
+    /* VISUALIZATION PANEL */
+    .viz-wrap { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-lg); box-shadow: var(--shadow); margin-bottom: 1.5rem; overflow: hidden; }
+    .viz-header { display: flex; align-items: center; justify-content: space-between; padding: 0.9rem 1.25rem; border-bottom: 1px solid var(--border); flex-wrap: wrap; gap: 0.75rem; }
+    .viz-title-row { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+    .viz-title { font-family: 'Syne', sans-serif; font-weight: 700; font-size: 0.92rem; }
+    .dev-badge { font-family: 'DM Mono', monospace; font-size: 0.68rem; background: var(--accent-light); color: var(--accent); padding: 3px 10px; border-radius: 20px; font-weight: 500; }
+    .hm-listing-select { font-family: 'DM Sans', sans-serif; font-size: 0.82rem; background: var(--surface-2); border: 1px solid var(--border); border-radius: 7px; padding: 5px 10px; color: var(--text); outline: none; min-width: 260px; cursor: pointer; }
+    .hm-listing-select:focus { border-color: var(--accent); }
+    .viz-legend { display: flex; align-items: center; gap: 10px; font-family: 'DM Mono', monospace; font-size: 0.63rem; color: var(--text-3); flex-wrap: wrap; }
+    .legend-item { display: flex; align-items: center; gap: 4px; white-space: nowrap; }
+    .legend-swatch { width: 11px; height: 11px; border-radius: 2px; display: inline-block; flex-shrink: 0; }
+    .viz-body { padding: 1rem 1.25rem 1.25rem; overflow-x: auto; }
+
+    /* COUNT GRID */
+    .count-grid { display: grid; gap: 3px; min-width: max-content; }
+    .cg-col-label { font-family: 'DM Mono', monospace; font-size: 0.65rem; letter-spacing: 0.04em; color: var(--text-3); text-align: center; padding: 2px 4px 7px; white-space: nowrap; }
+    .cg-row-label { font-family: 'DM Mono', monospace; font-size: 0.67rem; color: var(--text-2); display: flex; align-items: center; padding-right: 10px; white-space: nowrap; font-weight: 500; }
+    .cg-row-label.weekend { color: #B26A00; }
+
+    /* Each cell is split into pos (top) + neg (bottom) halves */
+    .cg-cell { min-width: 64px; height: 52px; border-radius: 6px; overflow: hidden; display: flex; flex-direction: column; border: 1px solid var(--border); background: var(--surface-2); }
+    .cg-cell.active { box-shadow: 0 0 0 2px var(--accent); }
+    .cg-half { flex: 1; display: flex; align-items: center; justify-content: center; font-family: 'DM Mono', monospace; font-size: 0.7rem; font-weight: 600; transition: filter 0.12s, transform 0.1s; cursor: default; line-height: 1; }
+    .cg-half.clickable { cursor: pointer; }
+    .cg-half.clickable:hover { filter: brightness(0.88); transform: scale(1.04); z-index: 2; position: relative; }
+    .cg-half.selected { outline: 2px solid var(--text); outline-offset: -2px; }
+
+    /* Positive half — intensity by count */
+    .cg-pos-0  { background: #F0EDE6; color: #C8C0B0; }
+    .cg-pos-1  { background: #C8E6C9; color: #1B5E20; }
+    .cg-pos-2  { background: #81C784; color: #1B5E20; }
+    .cg-pos-3  { background: #43A047; color: #fff; }
+    .cg-pos-4  { background: #2E7D32; color: #fff; }
+    .cg-pos-hi { background: #1B5E20; color: #fff; }
+
+    /* Negative half — intensity by count */
+    .cg-neg-0  { background: #F0EDE6; color: #C8C0B0; }
+    .cg-neg-1  { background: #FFCCBC; color: #BF360C; }
+    .cg-neg-2  { background: #EF9A9A; color: #B71C1C; }
+    .cg-neg-3  { background: #EF5350; color: #fff; }
+    .cg-neg-4  { background: #C62828; color: #fff; }
+    .cg-neg-hi { background: #B71C1C; color: #fff; }
+
+    .cg-empty-state { padding: 2.5rem; text-align: center; font-size: 0.85rem; color: var(--text-3); }
+
+    /* Active filter indicator strip */
+    .active-filter-strip { display: none; align-items: center; gap: 8px; padding: 6px 1.25rem; background: var(--accent-light); border-bottom: 1px solid var(--border); font-size: 0.78rem; color: var(--accent); font-family: 'DM Mono', monospace; flex-wrap: wrap; }
+    .active-filter-strip.visible { display: flex; }
+    .clear-viz-filter { cursor: pointer; font-weight: 600; margin-left: auto; text-decoration: underline; font-size: 0.72rem; }
+
+    /* CONTROLS */
+    .controls-bar { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 1rem 1.25rem; display: flex; gap: 1rem; align-items: flex-end; flex-wrap: wrap; margin-bottom: 1rem; box-shadow: var(--shadow); }
+    .control-group { display: flex; flex-direction: column; gap: 0.35rem; flex: 1; min-width: 140px; }
+    .control-label { font-family: 'DM Mono', monospace; font-size: 0.65rem; letter-spacing: 0.1em; text-transform: uppercase; color: var(--text-3); }
+    select, input[type="number"] { background: var(--surface-2); border: 1px solid var(--border); border-radius: 7px; padding: 7px 10px; font-family: 'DM Sans', sans-serif; font-size: 0.85rem; color: var(--text); outline: none; width: 100%; transition: border-color 0.15s; }
+    select:focus, input:focus { border-color: var(--accent); }
+    .btn { font-family: 'Syne', sans-serif; font-weight: 600; font-size: 0.8rem; letter-spacing: 0.03em; padding: 8px 16px; border-radius: 7px; border: none; cursor: pointer; transition: all 0.15s; white-space: nowrap; }
+    .btn-primary { background: var(--accent); color: white; }
+    .btn-primary:hover { background: #1f4a36; transform: translateY(-1px); }
+    .btn-ghost { background: var(--surface-2); color: var(--text-2); border: 1px solid var(--border); }
+    .btn-ghost:hover { background: var(--border); }
+
+    /* TABLE */
+    .table-wrapper { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-lg); overflow: hidden; box-shadow: var(--shadow); }
+    .table-header-bar { display: flex; align-items: center; justify-content: space-between; padding: 1rem 1.25rem; border-bottom: 1px solid var(--border); }
+    .table-title { font-family: 'Syne', sans-serif; font-weight: 700; font-size: 0.95rem; display: flex; align-items: center; gap: 8px; }
+    .result-count { font-family: 'DM Mono', monospace; font-size: 0.7rem; background: var(--accent-light); color: var(--accent); padding: 3px 10px; border-radius: 20px; font-weight: 500; }
+    .table-scroll { overflow-x: auto; max-height: 600px; overflow-y: auto; }
+    table { width: 100%; border-collapse: collapse; font-size: 0.85rem; }
+    thead { position: sticky; top: 0; z-index: 10; }
+    th { background: var(--surface-2); padding: 10px 14px; text-align: left; font-family: 'DM Mono', monospace; font-size: 0.65rem; letter-spacing: 0.1em; text-transform: uppercase; color: var(--text-3); border-bottom: 1px solid var(--border); white-space: nowrap; cursor: pointer; user-select: none; transition: color 0.15s; }
+    th:hover { color: var(--text); }
+    th .sort-icon { display: inline-block; margin-left: 4px; opacity: 0.4; font-size: 0.6rem; }
+    th.sorted { color: var(--accent); }
+    th.sorted .sort-icon { opacity: 1; }
+    td { padding: 10px 14px; border-bottom: 1px solid var(--border); white-space: nowrap; color: var(--text); }
+    tr:last-child td { border-bottom: none; }
+    tr:hover td { background: var(--surface-2); }
+    .col-date { font-family: 'DM Mono', monospace; font-size: 0.8rem; color: var(--text-2); }
+    .col-day { font-family: 'DM Mono', monospace; font-size: 0.75rem; padding: 3px 8px; border-radius: 4px; background: var(--surface-2); display: inline-block; }
+    .col-day.weekend { background: #FFF3E0; color: #B26A00; }
+    .col-listing { font-weight: 500; max-width: 220px; overflow: hidden; text-overflow: ellipsis; }
+    .col-price { font-family: 'DM Mono', monospace; font-size: 0.82rem; }
+    .col-deviation { font-family: 'DM Mono', monospace; font-size: 0.82rem; font-weight: 500; padding: 3px 10px; border-radius: 5px; display: inline-block; }
+    .col-deviation.pos { background: var(--positive-bg); color: var(--positive); }
+    .col-deviation.neg { background: var(--negative-bg); color: var(--negative); }
+
+    /* STATES */
+    .state-box { padding: 4rem 2rem; text-align: center; }
+    .state-icon { font-size: 2.5rem; margin-bottom: 1rem; opacity: 0.3; }
+    .state-title { font-family: 'Syne', sans-serif; font-weight: 700; font-size: 1rem; color: var(--text-2); margin-bottom: 0.4rem; }
+    .state-sub { font-size: 0.85rem; color: var(--text-3); }
+    .progress-bar { height: 3px; background: var(--border); border-radius: 2px; margin-top: 12px; overflow: hidden; }
+    .progress-fill { height: 100%; background: var(--accent); border-radius: 2px; animation: pa 1.2s ease infinite; }
+    @keyframes pa { 0%{width:0%;margin-left:0} 50%{width:60%} 100%{width:0%;margin-left:100%} }
+
+    /* TOAST */
+    .toast { position: fixed; bottom: 1.5rem; right: 1.5rem; background: var(--text); color: #F5F3EE; padding: 12px 20px; border-radius: 10px; font-size: 0.85rem; display: flex; align-items: center; gap: 10px; box-shadow: var(--shadow-lg); transform: translateY(80px); opacity: 0; transition: all 0.3s cubic-bezier(0.34,1.56,0.64,1); z-index: 1000; max-width: 360px; }
+    .toast.show { transform: translateY(0); opacity: 1; }
+    .toast.error { background: var(--negative); }
+
+    /* PAGINATION */
+    .pagination { display: flex; align-items: center; justify-content: space-between; padding: 0.75rem 1.25rem; border-top: 1px solid var(--border); font-size: 0.8rem; color: var(--text-3); }
+    .page-controls { display: flex; align-items: center; gap: 8px; }
+    .page-btn { width: 30px; height: 30px; border-radius: 6px; border: 1px solid var(--border); background: var(--surface); cursor: pointer; display: flex; align-items: center; justify-content: center; font-size: 0.8rem; color: var(--text-2); transition: all 0.15s; }
+    .page-btn:hover:not(:disabled) { background: var(--surface-2); }
+    .page-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+    .page-btn.active { background: var(--accent); color: white; border-color: var(--accent); }
+
+    .hidden { display: none !important; }
+    @media (max-width: 768px) { main { padding: 1.5rem 1rem; } .controls-bar { flex-direction: column; } }
+  </style>
+</head>
+<body>
+<header>
+  <div class="logo"><span class="logo-dot"></span>PriceLabs Deviation Analyzer</div>
+  <span class="header-badge">CLIENT-SIDE · NO DATA STORED</span>
+</header>
+<main>
+
+  <!-- UPLOAD -->
+  <div class="upload-section" id="uploadSection">
+    <div class="section-label">Step 1 — Upload File</div>
+    <div class="upload-zone" id="uploadZone">
+      <input type="file" id="fileInput" accept=".xlsx,.xls,.csv" />
+      <div class="upload-icon">📊</div>
+      <div class="upload-title">Drop your PriceLabs file here</div>
+      <div class="upload-sub">or click to browse</div>
+      <div class="upload-instruction">📍 In PriceLabs: <strong>Dynamic Pricing</strong> → <strong>Customization</strong> → Select PMS in left panel → Download CSV from the <strong>⋯</strong> options on the right side</div>
+      <div class="upload-hint"><span>📎</span>.xlsx, .xls or .csv · up to 10,000 rows · processed in-browser</div>
+    </div>
+  </div>
+
+  <!-- VISUALIZATION -->
+  <div class="viz-wrap hidden" id="vizWrap">
+    <div class="viz-header">
+      <div class="viz-title-row">
+        <div class="viz-title">Deviation Occurrence Heatmap</div>
+        <span class="dev-badge" id="statDeviations">—</span>
+        <select class="hm-listing-select" id="hmListingSelect">
+          <option value="">— All Listings —</option>
+        </select>
+      </div>
+      <div class="viz-legend">
+        <span style="font-size:0.7rem;color:var(--text-2);font-weight:500">Each cell: </span>
+        <span class="legend-item"><span class="legend-swatch" style="background:#43A047"></span>Positive count (top)</span>
+        <span class="legend-item"><span class="legend-swatch" style="background:#EF5350"></span>Negative count (bottom)</span>
+        <span class="legend-item"><span class="legend-swatch" style="background:#F0EDE6;border:1px solid #ddd"></span>None</span>
+      </div>
+    </div>
+    <div class="active-filter-strip" id="activeFilterStrip">
+      <span id="activeFilterLabel"></span>
+      <span class="clear-viz-filter" onclick="clearVizFilter()">✕ Clear</span>
+    </div>
+    <div class="viz-body">
+      <div class="count-grid" id="countGrid"></div>
+    </div>
+  </div>
+
+  <!-- CONTROLS -->
+  <div class="controls-bar hidden" id="controlsBar">
+    <div class="control-group">
+      <div class="control-label">Listing Name</div>
+      <select id="filterListing"><option value="">All Listings</option></select>
+    </div>
+    <div class="control-group">
+      <div class="control-label">Day of Week</div>
+      <select id="filterDay">
+        <option value="">All Days</option>
+        <option>Monday</option><option>Tuesday</option><option>Wednesday</option>
+        <option>Thursday</option><option>Friday</option><option>Saturday</option><option>Sunday</option>
+      </select>
+    </div>
+    <div class="control-group" style="max-width:170px">
+      <div class="control-label">Min Deviation %</div>
+      <input type="number" id="filterDevMin" value="40" step="5"
+        title="Positive: show deviations ≥ this value. Negative: show deviations ≤ this value. E.g. 40 = |dev|≥40%, -15 = dev≤-15%" />
+    </div>
+    <div class="control-group" style="max-width:160px">
+      <div class="control-label">Direction</div>
+      <select id="filterDir">
+        <option value="">Both</option>
+        <option value="positive">Positive only</option>
+        <option value="negative">Negative only</option>
+      </select>
+    </div>
+    <button class="btn btn-ghost" onclick="resetFilters()">Reset</button>
+    <button class="btn btn-primary" onclick="exportCSV()">⬇ Export CSV</button>
+  </div>
+
+  <!-- TABLE -->
+  <div class="table-wrapper hidden" id="tableWrapper">
+    <div class="table-header-bar">
+      <div class="table-title">Deviation Results <span class="result-count" id="resultCount">0 rows</span></div>
+      <div style="font-size:0.78rem;color:var(--text-3)">Click column headers to sort</div>
+    </div>
+    <div class="table-scroll">
+      <table>
+        <thead><tr>
+          <th onclick="sortBy('date')">Date <span class="sort-icon">⇅</span></th>
+          <th onclick="sortBy('day')">Day of Week <span class="sort-icon">⇅</span></th>
+          <th onclick="sortBy('listing')">Listing Name <span class="sort-icon">⇅</span></th>
+          <th onclick="sortBy('price')">Your Price <span class="sort-icon">⇅</span></th>
+          <th onclick="sortBy('adr')">ADR Last Year <span class="sort-icon">⇅</span></th>
+          <th onclick="sortBy('deviation')" class="sorted">Deviation % <span class="sort-icon">↓</span></th>
+        </tr></thead>
+        <tbody id="tableBody"></tbody>
+      </table>
+    </div>
+    <div class="state-box hidden" id="emptyState">
+      <div class="state-icon">🔍</div>
+      <div class="state-title">No results found</div>
+      <div class="state-sub">Try adjusting the filters or clicking a different cell.</div>
+    </div>
+    <div class="pagination" id="pagination">
+      <span id="pageInfo"></span>
+      <div class="page-controls" id="pageControls"></div>
+    </div>
+  </div>
+
+  <!-- LOADING -->
+  <div class="table-wrapper hidden" id="loadingBox">
+    <div class="state-box">
+      <div class="state-icon">⚙️</div>
+      <div class="state-title">Processing your file…</div>
+      <div class="state-sub">Parsing rows and calculating deviations</div>
+      <div class="progress-bar"><div class="progress-fill"></div></div>
+    </div>
+  </div>
+
+</main>
+<div class="toast" id="toast"></div>
+
+<script>
+  // ─── Constants ────────────────────────────────────────────────
+  const DAY_ORDER   = ['Monday','Tuesday','Wednesday','Thursday','Friday','Saturday','Sunday'];
+  const MONTH_NAMES = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  const WEEKENDS    = new Set(['Saturday','Sunday']);
+  const PAGE_SIZE   = 100;
+
+  // ─── State ────────────────────────────────────────────────────
+  let computedRows = [];   // all valid rows with deviation
+  let filteredRows = [];   // rows currently shown in table
+  let currentPage  = 1;
+  let sortKey      = 'deviation';
+  let sortDir      = -1;
+
+  // Viz click selection state
+  let vizFilter = null;  // { month, day, dir } or null
+
+  // ─── Upload ───────────────────────────────────────────────────
+  const zone = document.getElementById('uploadZone');
+  zone.addEventListener('dragover', e => { e.preventDefault(); zone.classList.add('drag-over'); });
+  zone.addEventListener('dragleave', () => zone.classList.remove('drag-over'));
+  zone.addEventListener('drop', e => { e.preventDefault(); zone.classList.remove('drag-over'); const f = e.dataTransfer.files[0]; if (f) handleFile(f); });
+  document.getElementById('fileInput').addEventListener('change', e => { if (e.target.files[0]) handleFile(e.target.files[0]); });
+
+  // ─── Filter listeners ─────────────────────────────────────────
+  ['filterListing','filterDay','filterDir'].forEach(id =>
+    document.getElementById(id).addEventListener('change', () => { vizFilter = null; updateVizHighlight(); applyFilters(); })
+  );
+  document.getElementById('filterDevMin').addEventListener('input', () => { vizFilter = null; updateVizHighlight(); buildViz(document.getElementById('hmListingSelect').value); applyFilters(); });
+  document.getElementById('filterDevMin').addEventListener('change', () => { vizFilter = null; updateVizHighlight(); buildViz(document.getElementById('hmListingSelect').value); applyFilters(); });
+  document.getElementById('hmListingSelect').addEventListener('change', () => {
+    vizFilter = null; updateVizHighlight();
+    buildViz(document.getElementById('hmListingSelect').value);
+    applyFilters();
+  });
+
+  // ─── File handling ────────────────────────────────────────────
+  function handleFile(file) {
+    if (!/\.(xlsx|xls|csv)$/i.test(file.name)) { showToast('Please upload .xlsx, .xls or .csv', true); return; }
+    show('loadingBox'); hide('tableWrapper');
+    const isCSV = /\.csv$/i.test(file.name);
+    const reader = new FileReader();
+    reader.onload = e => {
+      try {
+        let raw;
+        if (isCSV) {
+          const cleaned = e.target.result.split('\n').filter(l => !l.trimStart().startsWith('#')).join('\n');
+          const wb = XLSX.read(cleaned, { type: 'string', cellDates: false, raw: false });
+          raw = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], { defval: null });
+        } else {
+          const wb = XLSX.read(e.target.result, { type: 'array', cellDates: true });
+          raw = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], { defval: null });
+        }
+        processData(raw, file.name);
+      } catch(err) { hide('loadingBox'); showToast('Failed to parse: ' + err.message, true); }
+    };
+    isCSV ? reader.readAsText(file) : reader.readAsArrayBuffer(file);
+  }
+
+  // ─── Date parser ──────────────────────────────────────────────
+  function parseDate(raw) {
+    if (raw instanceof Date) return raw;
+    if (typeof raw === 'number') { const d = XLSX.SSF.parse_date_code(raw); return new Date(d.y, d.m-1, d.d); }
+    if (typeof raw === 'string') {
+      const iso = raw.trim().match(/^(\d{4})-(\d{2})-(\d{2})/);
+      if (iso) return new Date(+iso[1], +iso[2]-1, +iso[3]);
+      return new Date(raw);
+    }
+    return null;
+  }
+
+  // ─── Process data ─────────────────────────────────────────────
+  function processData(raw, filename) {
+    const sample = raw[0] || {};
+    const keys   = Object.keys(sample);
+    const findCol = (...cands) => { for (const c of cands) { const k = keys.find(k => k.trim().toLowerCase().includes(c.toLowerCase())); if (k) return k; } return null; };
+
+    const colDate    = findCol('date');
+    const colListing = findCol('listing name', 'listing', 'property');
+    const colPrice   = findCol('your price', 'price');
+    const colADR     = findCol('adr last year', 'adr last', 'last year');
+    const colADRNow  = keys.find(k => k.trim().toLowerCase() === 'adr') || null;
+
+    if (!colDate || !colListing || !colPrice || !colADR) {
+      hide('loadingBox');
+      showToast('Cannot map columns. Found: ' + keys.join(', '), true);
+      return;
+    }
+
+    computedRows = [];
+    for (const row of raw) {
+      const rawDate = row[colDate];
+      if (!rawDate) continue;
+      const dateObj = parseDate(rawDate);
+      if (!dateObj || isNaN(dateObj)) continue;
+
+      const price = parseFloat(row[colPrice]);
+      const adr   = parseFloat(row[colADR]);
+      if (isNaN(price) || isNaN(adr) || adr === 0) continue;
+
+      // Exclude rows where current-year ADR is already realized
+      if (colADRNow) { const adrNow = parseFloat(row[colADRNow]); if (!isNaN(adrNow) && adrNow > 0) continue; }
+
+      const listing   = String(row[colListing] || '').trim();
+      if (!listing) continue;
+
+      const deviation = ((price - adr) / adr) * 100;
+      const day       = DAY_ORDER[((dateObj.getDay() + 6) % 7)];
+
+      computedRows.push({
+        date:    dateObj,
+        dateStr: dateObj.toLocaleDateString('en-GB', { day:'2-digit', month:'short', year:'numeric' }),
+        month:   dateObj.getMonth(),
+        day, listing, price, adr, deviation
+      });
+    }
+
+    // Badge: count rows that pass the current filter threshold
+    updateBadge();
+
+    // Populate dropdowns
+    const listings = [...new Set(computedRows.map(r => r.listing))].sort();
+    const selFilter = document.getElementById('filterListing');
+    const selHM     = document.getElementById('hmListingSelect');
+    selFilter.innerHTML = '<option value="">All Listings</option>';
+    selHM.innerHTML     = '<option value="">— All Listings —</option>';
+    listings.forEach(l => {
+      const o1 = document.createElement('option'); o1.value = l; o1.textContent = l; selFilter.appendChild(o1);
+      const o2 = document.createElement('option'); o2.value = l; o2.textContent = l; selHM.appendChild(o2);
+    });
+
+    hide('loadingBox'); hide('uploadSection');
+    show('vizWrap'); show('controlsBar'); show('tableWrapper');
+
+    vizFilter = null;
+    buildViz('');
+    applyFilters();
+    showToast(`✓ Parsed ${computedRows.length.toLocaleString()} rows from "${filename}"`);
+  }
+
+  // ─── Badge ────────────────────────────────────────────────────
+  function updateBadge() {
+    const threshold = getThreshold();
+    const flagged = computedRows.filter(r => passesThreshold(r.deviation, threshold));
+    document.getElementById('statDeviations').textContent = flagged.length.toLocaleString() + ' flagged';
+  }
+
+  // ─── Threshold logic ──────────────────────────────────────────
+  // User enters any number. Behaviour:
+  //   positive value N  → show rows where deviation >= N OR deviation <= -N (both sides)
+  //   negative value -N → show rows where deviation <= -N  (negative side only by threshold)
+  //   combined with Direction filter for further restriction
+  function getThreshold() {
+    return parseFloat(document.getElementById('filterDevMin').value) || 40;
+  }
+
+  function passesThreshold(dev, threshold) {
+    if (threshold >= 0) {
+      // e.g. 40 → |dev| >= 40
+      return Math.abs(dev) >= threshold;
+    } else {
+      // e.g. -15 → dev <= -15
+      return dev <= threshold;
+    }
+  }
+
+  // ─── Build visualization ──────────────────────────────────────
+  function buildViz(listing) {
+    const grid      = document.getElementById('countGrid');
+    const threshold = getThreshold();
+
+    // Source rows: apply listing filter + threshold
+    const source = computedRows.filter(r => {
+      if (listing && r.listing !== listing) return false;
+      return passesThreshold(r.deviation, threshold);
+    });
+
+    if (!source.length) {
+      grid.style.cssText = '';
+      grid.innerHTML = '<div class="cg-empty-state">No deviations match the current threshold for this listing.</div>';
+      return;
+    }
+
+    // Which months have data
+    const activeMonths = MONTH_NAMES.map((_, m) => source.some(r => r.month === m));
+    // Build year suffix per month from actual row dates (e.g. Jan-27, Apr-26)
+    const monthYear = {};
+    source.forEach(r => {
+      if (monthYear[r.month] === undefined) {
+        monthYear[r.month] = String(r.date.getFullYear()).slice(-2);
+      }
+    });
+    const months = MONTH_NAMES.map((name, i) => ({
+      name: activeMonths[i] ? name + '-' + (monthYear[i] || '') : name,
+      i
+    })).filter(m => activeMonths[m.i]);
+
+    // Count per (day, month, dir)
+    // counts[day][month] = { pos: N, neg: N }
+    const counts = {};
+    DAY_ORDER.forEach(d => {
+      counts[d] = {};
+      months.forEach(({ i: m }) => { counts[d][m] = { pos: 0, neg: 0 }; });
+    });
+    source.forEach(r => {
+      if (counts[r.day] && counts[r.day][r.month] !== undefined) {
+        if (r.deviation >= 0) counts[r.day][r.month].pos++;
+        else                   counts[r.day][r.month].neg++;
+      }
+    });
+
+    // Max counts for intensity scaling
+    let maxPos = 0, maxNeg = 0;
+    DAY_ORDER.forEach(d => months.forEach(({ i: m }) => {
+      maxPos = Math.max(maxPos, counts[d][m].pos);
+      maxNeg = Math.max(maxNeg, counts[d][m].neg);
+    }));
+
+    const cols = months.length;
+    grid.style.cssText = `display:grid; gap:3px; min-width:max-content; grid-template-columns: 56px repeat(${cols}, minmax(60px, 1fr));`;
+    grid.innerHTML = '';
+
+    // Header row
+    grid.appendChild(document.createElement('div')); // corner
+    months.forEach(({ name }) => {
+      const el = document.createElement('div');
+      el.className = 'cg-col-label';
+      el.textContent = name;
+      grid.appendChild(el);
+    });
+
+    // Data rows
+    DAY_ORDER.forEach(day => {
+      const rowLabel = document.createElement('div');
+      rowLabel.className = 'cg-row-label' + (WEEKENDS.has(day) ? ' weekend' : '');
+      rowLabel.textContent = day.slice(0,3).toUpperCase();
+      grid.appendChild(rowLabel);
+
+      months.forEach(({ i: m, name: mName }) => {
+        const { pos, neg } = counts[day][m];
+        const cell = document.createElement('div');
+        cell.className = 'cg-cell';
+        cell.id = `cell-${day}-${m}`;
+
+        // Top half: positive
+        const posHalf = document.createElement('div');
+        posHalf.className = 'cg-half ' + posClass(pos, maxPos) + (pos > 0 ? ' clickable' : '');
+        posHalf.textContent = pos > 0 ? pos : '';
+        posHalf.title = pos > 0 ? `${mName} · ${day} · Positive: ${pos} occurrence${pos>1?'s':''}` : '';
+        if (pos > 0) {
+          posHalf.addEventListener('click', () => onVizClick(day, m, mName, 'positive', pos));
+        }
+
+        // Bottom half: negative
+        const negHalf = document.createElement('div');
+        negHalf.className = 'cg-half ' + negClass(neg, maxNeg) + (neg > 0 ? ' clickable' : '');
+        negHalf.textContent = neg > 0 ? neg : '';
+        negHalf.title = neg > 0 ? `${mName} · ${day} · Negative: ${neg} occurrence${neg>1?'s':''}` : '';
+        if (neg > 0) {
+          negHalf.addEventListener('click', () => onVizClick(day, m, mName, 'negative', neg));
+        }
+
+        cell.appendChild(posHalf);
+        cell.appendChild(negHalf);
+        grid.appendChild(cell);
+      });
+    });
+
+    // Re-apply active highlight if vizFilter set
+    updateVizHighlight();
+  }
+
+  function posClass(count, max) {
+    if (count === 0) return 'cg-pos-0';
+    if (max <= 1)    return 'cg-pos-1';
+    const ratio = count / max;
+    if (ratio <= 0.2) return 'cg-pos-1';
+    if (ratio <= 0.4) return 'cg-pos-2';
+    if (ratio <= 0.6) return 'cg-pos-3';
+    if (ratio <= 0.8) return 'cg-pos-4';
+    return 'cg-pos-hi';
+  }
+  function negClass(count, max) {
+    if (count === 0) return 'cg-neg-0';
+    if (max <= 1)    return 'cg-neg-1';
+    const ratio = count / max;
+    if (ratio <= 0.2) return 'cg-neg-1';
+    if (ratio <= 0.4) return 'cg-neg-2';
+    if (ratio <= 0.6) return 'cg-neg-3';
+    if (ratio <= 0.8) return 'cg-neg-4';
+    return 'cg-neg-hi';
+  }
+
+  // ─── Viz click → filter table ─────────────────────────────────
+  function onVizClick(day, month, mName, dir, count) {
+    vizFilter = { day, month, dir };
+
+    // Update filter bar
+    const strip = document.getElementById('activeFilterStrip');
+    const label = document.getElementById('activeFilterLabel');
+    label.textContent = `Filtered: ${mName} · ${day} · ${dir === 'positive' ? '▲ Positive' : '▼ Negative'} (${count} row${count>1?'s':''})`;
+    strip.classList.add('visible');
+
+    // Sync the Day filter dropdown
+    document.getElementById('filterDay').value = day;
+    document.getElementById('filterDir').value = dir;
+
+    updateVizHighlight();
+    applyFilters();
+    document.getElementById('tableWrapper').scrollIntoView({ behavior: 'smooth' });
+  }
+
+  function clearVizFilter() {
+    vizFilter = null;
+    document.getElementById('activeFilterStrip').classList.remove('visible');
+    document.getElementById('filterDay').value = '';
+    document.getElementById('filterDir').value = '';
+    updateVizHighlight();
+    applyFilters();
+  }
+
+  function updateVizHighlight() {
+    // Remove all selected states
+    document.querySelectorAll('.cg-half.selected').forEach(el => el.classList.remove('selected'));
+    if (!vizFilter) return;
+    const cellId = `cell-${vizFilter.day}-${vizFilter.month}`;
+    const cell = document.getElementById(cellId);
+    if (!cell) return;
+    const halves = cell.querySelectorAll('.cg-half');
+    const idx = vizFilter.dir === 'positive' ? 0 : 1;
+    if (halves[idx]) halves[idx].classList.add('selected');
+  }
+
+  // ─── Filters ──────────────────────────────────────────────────
+  function applyFilters() {
+    const listing   = document.getElementById('filterListing').value;
+    const day       = document.getElementById('filterDay').value;
+    const dir       = document.getElementById('filterDir').value;
+    const threshold = getThreshold();
+
+    filteredRows = computedRows.filter(r => {
+      // Threshold
+      if (!passesThreshold(r.deviation, threshold)) return false;
+      // Listing
+      if (listing && r.listing !== listing) return false;
+      // Day of week
+      if (day && r.day !== day) return false;
+      // Direction
+      if (dir === 'positive' && r.deviation < 0) return false;
+      if (dir === 'negative' && r.deviation >= 0) return false;
+      // Viz filter: also restrict to specific month
+      if (vizFilter && r.month !== vizFilter.month) return false;
+      return true;
+    });
+
+    // Also apply heatmap listing to table if set
+    const hmListing = document.getElementById('hmListingSelect').value;
+    if (hmListing && !listing) {
+      filteredRows = filteredRows.filter(r => r.listing === hmListing);
+    }
+
+    currentPage = 1;
+    sortRows();
+    renderTable();
+    updateBadge();
+    updateVizHighlight();
+  }
+
+  function resetFilters() {
+    document.getElementById('filterListing').value = '';
+    document.getElementById('filterDay').value = '';
+    document.getElementById('filterDevMin').value = '40';
+    document.getElementById('filterDir').value = '';
+    vizFilter = null;
+    document.getElementById('activeFilterStrip').classList.remove('visible');
+    updateVizHighlight();
+    buildViz(document.getElementById('hmListingSelect').value);
+    applyFilters();
+  }
+
+  // ─── Sort ─────────────────────────────────────────────────────
+  function sortBy(key) {
+    sortDir = (sortKey === key) ? sortDir * -1 : (key === 'deviation' ? -1 : 1);
+    sortKey = key;
+    document.querySelectorAll('th').forEach(th => { th.classList.remove('sorted'); th.querySelector('.sort-icon').textContent = '⇅'; });
+    const idx = { date:0, day:1, listing:2, price:3, adr:4, deviation:5 }[key];
+    const th = document.querySelectorAll('th')[idx];
+    if (th) { th.classList.add('sorted'); th.querySelector('.sort-icon').textContent = sortDir===1?'↑':'↓'; }
+    sortRows(); renderTable();
+  }
+  function sortRows() {
+    filteredRows.sort((a, b) => {
+      let va = a[sortKey], vb = b[sortKey];
+      if (sortKey === 'date') return sortDir * (va - vb);
+      if (typeof va === 'string') return sortDir * va.localeCompare(vb);
+      return sortDir * (va - vb);
+    });
+  }
+
+  // ─── Render table ─────────────────────────────────────────────
+  function renderTable() {
+    const tbody = document.getElementById('tableBody');
+    const total = filteredRows.length;
+    document.getElementById('resultCount').textContent = total.toLocaleString() + ' row' + (total!==1?'s':'');
+    if (total === 0) { tbody.innerHTML=''; show('emptyState'); renderPagination(0); return; }
+    hide('emptyState');
+    const page = filteredRows.slice((currentPage-1)*PAGE_SIZE, currentPage*PAGE_SIZE);
+    tbody.innerHTML = page.map(r => {
+      const sign     = r.deviation >= 0 ? '+' : '';
+      const devClass = r.deviation >= 0 ? 'pos' : 'neg';
+      const dayClass = WEEKENDS.has(r.day) ? 'weekend' : '';
+      return `<tr>
+        <td class="col-date">${r.dateStr}</td>
+        <td><span class="col-day ${dayClass}">${r.day}</span></td>
+        <td class="col-listing" title="${escHtml(r.listing)}">${escHtml(r.listing)}</td>
+        <td class="col-price">${fmtCurrency(r.price)}</td>
+        <td class="col-price">${fmtCurrency(r.adr)}</td>
+        <td><span class="col-deviation ${devClass}">${sign}${r.deviation.toFixed(1)}%</span></td>
+      </tr>`;
+    }).join('');
+    renderPagination(total);
+  }
+
+  function renderPagination(total) {
+    const totalPages = Math.ceil(total / PAGE_SIZE);
+    document.getElementById('pageInfo').textContent = total > 0 ? `Showing ${(currentPage-1)*PAGE_SIZE+1}–${Math.min(currentPage*PAGE_SIZE,total)} of ${total.toLocaleString()}` : '';
+    const pc = document.getElementById('pageControls');
+    if (totalPages <= 1) { pc.innerHTML=''; return; }
+    let html = `<button class="page-btn" onclick="gotoPage(${currentPage-1})" ${currentPage===1?'disabled':''}>‹</button>`;
+    for (let i=1; i<=totalPages; i++) {
+      if (totalPages>7 && i>2 && i<totalPages-1 && Math.abs(i-currentPage)>1) { if(i===3||i===totalPages-2) html+=`<span style="padding:0 4px;color:var(--text-3)">…</span>`; continue; }
+      html += `<button class="page-btn ${i===currentPage?'active':''}" onclick="gotoPage(${i})">${i}</button>`;
+    }
+    html += `<button class="page-btn" onclick="gotoPage(${currentPage+1})" ${currentPage===totalPages?'disabled':''}>›</button>`;
+    pc.innerHTML = html;
+  }
+  function gotoPage(p) {
+    const max = Math.ceil(filteredRows.length/PAGE_SIZE);
+    if (p<1||p>max) return;
+    currentPage=p; renderTable();
+    document.getElementById('tableWrapper').scrollIntoView({behavior:'smooth',block:'start'});
+  }
+
+  // ─── Export ───────────────────────────────────────────────────
+  function exportCSV() {
+    if (!filteredRows.length) { showToast('No data to export.', true); return; }
+    const headers = ['Date','Day of Week','Listing Name','Your Price','ADR Last Year','Deviation %'];
+    const rows = filteredRows.map(r => [r.dateStr, r.day, r.listing, r.price.toFixed(2), r.adr.toFixed(2), (r.deviation>=0?'+':'')+r.deviation.toFixed(2)+'%']);
+    const csv = [headers,...rows].map(r => r.map(v=>`"${v}"`).join(',')).join('\n');
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(new Blob([csv],{type:'text/csv'}));
+    a.download = 'pricelabs-deviations.csv'; a.click();
+    showToast('✓ CSV exported');
+  }
+
+  // ─── Helpers ──────────────────────────────────────────────────
+  function show(id) { document.getElementById(id).classList.remove('hidden'); }
+  function hide(id) { document.getElementById(id).classList.add('hidden'); }
+  function fmtCurrency(v) { return '$'+v.toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g,','); }
+  function escHtml(s) { return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+  let toastTimer;
+  function showToast(msg, isError=false) {
+    const t = document.getElementById('toast');
+    t.textContent = msg; t.className='toast show'+(isError?' error':'');
+    clearTimeout(toastTimer); toastTimer=setTimeout(()=>t.classList.remove('show'),3500);
+  }
+</script>
+</body>
+</html>
